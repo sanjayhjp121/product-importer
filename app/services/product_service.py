@@ -51,7 +51,8 @@ def upsert_product(db: Session, product_data: Dict) -> Product:
 
 def bulk_upsert_products(db: Session, products: List[Dict]) -> tuple[int, int]:
     """
-    Bulk upsert products using PostgreSQL ON CONFLICT.
+    Bulk upsert products using PostgreSQL INSERT ... ON CONFLICT.
+    Uses the case-insensitive unique index on lower(sku).
     
     Returns:
         Tuple of (created_count, updated_count)
@@ -59,25 +60,43 @@ def bulk_upsert_products(db: Session, products: List[Dict]) -> tuple[int, int]:
     if not products:
         return 0, 0
     
-    created = 0
-    updated = 0
+    # Check existing SKUs (case-insensitive) before bulk operation
+    skus_lower = {p['sku'].lower() for p in products}
+    existing_products = db.query(Product).filter(
+        func.lower(Product.sku).in_(skus_lower)
+    ).all()
+    existing_skus_lower = {p.sku.lower() for p in existing_products}
     
-    # Process in chunks to avoid memory issues
-    chunk_size = 1000
-    for i in range(0, len(products), chunk_size):
-        chunk = products[i:i + chunk_size]
-        
-        # Use individual upserts for case-insensitive matching
-        for product_data in chunk:
-            existing = get_product_by_sku(db, product_data['sku'])
-            if existing:
-                update_product(db, existing, {k: v for k, v in product_data.items() if k != 'sku'})
-                updated += 1
-            else:
-                create_product(db, product_data)
-                created += 1
+    # Separate into inserts and updates
+    to_insert = []
+    to_update_map = {}
     
-    return created, updated
+    for p in products:
+        sku_lower = p['sku'].lower()
+        if sku_lower in existing_skus_lower:
+            # Find the existing product (case-insensitive match)
+            existing = next(ep for ep in existing_products if ep.sku.lower() == sku_lower)
+            to_update_map[existing.id] = p
+        else:
+            to_insert.append(p)
+    
+    # Bulk insert new products
+    if to_insert:
+        db.bulk_insert_mappings(Product, to_insert)
+    
+    # Bulk update existing products
+    if to_update_map:
+        update_mappings = []
+        for product_id, product_data in to_update_map.items():
+            update_data = {k: v for k, v in product_data.items() if k != 'sku'}
+            update_data['id'] = product_id
+            update_mappings.append(update_data)
+        db.bulk_update_mappings(Product, update_mappings)
+    
+    # Single commit for all operations
+    db.commit()
+    
+    return len(to_insert), len(to_update_map)
 
 
 def get_products(
