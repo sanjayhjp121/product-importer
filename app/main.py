@@ -26,21 +26,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check endpoint (define before static files)
+@app.get("/api/health")
+def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
+
 # Include routers
 app.include_router(upload.router)
 app.include_router(products.router)
 app.include_router(webhooks.router)
 app.include_router(sse.router)
 
-# Mount static files
+# Mount static files (must be last to not interfere with API routes)
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="root")
-
-
-@app.get("/api/health")
-def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy"}
+    # Only mount root if we want to serve index.html, but API routes take precedence
+    # We'll mount it but FastAPI should check routes first
+    try:
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="root")
+    except Exception:
+        # If static files fail, continue without them
+        pass
 
