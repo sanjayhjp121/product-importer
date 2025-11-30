@@ -4,7 +4,7 @@ services:
     name: product-importer-web
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     plan: free
     envVars:
       - key: DATABASE_URL
@@ -23,8 +23,6 @@ services:
         value: "false"
       - key: ENVIRONMENT
         value: production
-      - key: PORT
-        value: 10000
 
   # Celery Worker Service
   - type: worker

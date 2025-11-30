@@ -1,11 +1,16 @@
 """Celery application configuration."""
 from celery import Celery
 from app.config import settings
+import os
+
+# Use environment variables if available, otherwise use settings defaults
+broker_url = os.getenv("CELERY_BROKER_URL", settings.CELERY_BROKER_URL)
+backend_url = os.getenv("CELERY_RESULT_BACKEND", settings.CELERY_RESULT_BACKEND)
 
 celery_app = Celery(
     "product_importer",
-    broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND
+    broker=broker_url,
+    backend=backend_url
 )
 
 celery_app.conf.update(
