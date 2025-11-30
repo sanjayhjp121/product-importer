@@ -38,15 +38,26 @@ app.include_router(products.router)
 app.include_router(webhooks.router)
 app.include_router(sse.router)
 
-# Mount static files (must be last to not interfere with API routes)
+# Mount static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    # Only mount root if we want to serve index.html, but API routes take precedence
-    # We'll mount it but FastAPI should check routes first
-    try:
-        app.mount("/", StaticFiles(directory=static_dir, html=True), name="root")
-    except Exception:
-        # If static files fail, continue without them
-        pass
+    
+    # Serve index.html for root and non-API routes
+    from fastapi.responses import FileResponse
+    from fastapi import Request
+    from fastapi.responses import Response
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(request: Request, full_path: str):
+        """Serve frontend for non-API routes."""
+        # Don't serve frontend for API routes
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("redoc") or full_path.startswith("openapi.json"):
+            return Response(status_code=404)
+        
+        # Serve index.html for all other routes (SPA routing)
+        index_path = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return Response(status_code=404)
 
