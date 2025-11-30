@@ -80,6 +80,15 @@ logs/
 celerybeat-schedule
 celerybeat.pid
 
+# Docker (not needed for Render deployment)
+docker-compose.yml
+Dockerfile
+.dockerignore
+start.sh
+
+# Sample files
+sample_products*.csv
+
 # Database
 *.db
 *.sqlite

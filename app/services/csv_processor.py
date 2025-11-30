@@ -20,7 +20,13 @@ def parse_csv_file(file_content: bytes) -> Iterator[Dict[str, str]]:
     
     for row in reader:
         # Normalize keys to lowercase and strip whitespace
-        normalized_row = {k.lower().strip(): v.strip() if v else None for k, v in row.items()}
+        # Skip None or empty keys (empty column headers)
+        normalized_row = {}
+        for k, v in row.items():
+            if k is not None:
+                key = k.lower().strip()
+                if key:  # Only add non-empty keys
+                    normalized_row[key] = v.strip() if v else None
         yield normalized_row
 
 
@@ -36,14 +42,16 @@ def validate_csv_row(row: Dict[str, str], row_number: int) -> tuple[bool, Option
         Tuple of (is_valid, error_message)
     """
     # Check required fields
-    if not row.get('sku'):
+    sku_value = row.get('sku')
+    if not sku_value:
         return False, f"Row {row_number}: SKU is required"
     
-    if not row.get('name'):
+    name_value = row.get('name')
+    if not name_value:
         return False, f"Row {row_number}: Name is required"
     
     # SKU should not be empty after stripping
-    sku = row['sku'].strip()
+    sku = sku_value.strip() if sku_value else ''
     if not sku:
         return False, f"Row {row_number}: SKU cannot be empty"
     
@@ -60,10 +68,14 @@ def row_to_product_dict(row: Dict[str, str]) -> Dict:
     Returns:
         Dictionary with product fields
     """
+    sku_value = row.get('sku', '')
+    name_value = row.get('name', '')
+    desc_value = row.get('description', '')
+    
     return {
-        'sku': row['sku'].strip(),
-        'name': row['name'].strip(),
-        'description': row.get('description', '').strip() or None,
+        'sku': sku_value.strip() if sku_value else '',
+        'name': name_value.strip() if name_value else '',
+        'description': desc_value.strip() if desc_value else None,
         'active': True  # Default to active
     }
 

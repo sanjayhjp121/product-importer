@@ -20,7 +20,8 @@ async def stream_progress(task_id: str):
     async def event_generator():
         last_progress = -1
         error_count = 0
-        max_errors = 10
+        max_errors = 30  # Increased to 30 seconds to wait for task to start
+        initial_wait = 0
         
         while True:
             # Get progress from Redis
@@ -52,10 +53,17 @@ async def stream_progress(task_id: str):
                         break
             else:
                 # No progress data yet, wait a bit
-                error_count += 1
-                if error_count >= max_errors:
-                    yield f"data: {json.dumps({'status': 'error', 'message': 'Task not found or expired'})}\n\n"
-                    break
+                # Give more time initially for task to start
+                initial_wait += 1
+                if initial_wait <= 5:
+                    # Send initial "waiting" message
+                    if initial_wait == 1:
+                        yield f"data: {json.dumps({'status': 'waiting', 'message': 'Waiting for task to start...', 'progress': 0, 'total': 0, 'percentage': 0})}\n\n"
+                else:
+                    error_count += 1
+                    if error_count >= max_errors:
+                        yield f"data: {json.dumps({'status': 'error', 'message': 'Task not found or expired'})}\n\n"
+                        break
             
             # Wait before next check
             await asyncio.sleep(1)

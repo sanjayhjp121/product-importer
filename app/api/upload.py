@@ -1,6 +1,8 @@
 """File upload endpoints."""
 import os
 import uuid
+import json
+import redis
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from app.config import settings
@@ -44,13 +46,26 @@ async def upload_csv(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
     
+    # Initialize progress in Redis immediately
+    redis_client = redis.from_url(settings.REDIS_URL)
+    initial_progress = {
+        "status": "queued",
+        "progress": 0,
+        "total": 0,
+        "percentage": 0,
+        "message": "Task queued, waiting to start...",
+        "errors": []
+    }
+    redis_client.setex(f"import_progress:{task_id}", 3600, json.dumps(initial_progress))
+    
     # Start Celery task
     try:
         import_products_task.delay(task_id, file_path)
     except Exception as e:
-        # Clean up file if task creation fails
+        # Clean up file and progress if task creation fails
         if os.path.exists(file_path):
             os.remove(file_path)
+        redis_client.delete(f"import_progress:{task_id}")
         raise HTTPException(status_code=500, detail=f"Error starting import task: {str(e)}")
     
     return UploadResponse(
